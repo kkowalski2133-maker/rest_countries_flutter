@@ -21,15 +21,13 @@ class _HomeScreenState extends State<HomeScreen> {
     _countriesFuture = _loadData();
   }
 
-  // Sprytna funkcja ładująca dane (API lub Offline)
   Future<List<Country>> _loadData() async {
     try {
       final data = await _apiService.fetchCountries();
-      await DatabaseHelper.instance.saveCountries(data); // Zapisz do bazy na przyszłość
+      await DatabaseHelper.instance.saveCountries(data);
       setState(() => _isOffline = false);
       return data;
     } catch (e) {
-      // Jeśli API padnie, ładujemy z bazy
       final offlineData = await DatabaseHelper.instance.getCountries();
       if (offlineData.isNotEmpty) {
         setState(() => _isOffline = true);
@@ -38,7 +36,6 @@ class _HomeScreenState extends State<HomeScreen> {
       throw Exception('Brak internetu i brak danych zapisanych offline.');
     }
   }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(

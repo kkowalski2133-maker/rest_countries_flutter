@@ -12,9 +12,9 @@ class Country {
 
   factory Country.fromJson(Map<String, dynamic> json) {
     return Country(
-      name: json['name']['common'] ?? 'Brak nazwy',
-      flagUrl: json['flags']['png'] ?? '',
-      alpha3Code: json['cca3'] ?? '',
+      name: json['names']?['common'] ?? 'Brak nazwy',
+      flagUrl: json['flag']?['url_png'] ?? json['flag']?['url_svg'] ?? '',
+      alpha3Code: json['codes']?['alpha_3'] ?? '',
     );
   }
 }
@@ -36,9 +36,11 @@ class CountryDetails {
 
   factory CountryDetails.fromJson(Map<String, dynamic> json) {
     return CountryDetails(
-      name: json['name']['common'] ?? 'Brak nazwy',
-      flagUrl: json['flags']['png'] ?? '',
-      capital: (json['capital'] as List<dynamic>?)?.first ?? 'Brak stolicy',
+      name: json['names']?['common'] ?? 'Brak nazwy',
+      flagUrl: json['flag']?['url_png'] ?? json['flag']?['url_svg'] ?? '',
+      capital: (json['capitals'] is List && json['capitals'].isNotEmpty)
+          ? json['capitals'][0]['name'] ?? 'Brak stolicy'
+          : 'Brak stolicy',
       region: json['region'] ?? 'Brak regionu',
       population: json['population'] ?? 0,
     );
@@ -48,30 +50,73 @@ class CountryDetails {
 // --- LOGIKA API ---
 
 class ApiService {
-  final String baseUrl = 'https://restcountries.com/v3.1';
+  final String baseUrl = 'https://api.restcountries.com/countries/v5';
+
+  // Twój wygenerowany klucz API
+  final Map<String, String> headers = {
+    'Authorization': 'Bearer rc_live_77f0faf11718499ab6dc88682f93e7c2'
+  };
 
   Future<List<Country>> fetchCountries() async {
     try {
-      final response = await http.get(Uri.parse('$baseUrl/all?fields=name,flags,cca3'));
+      final response = await http.get(
+        Uri.parse('$baseUrl?limit=100&response_fields=names,flag,codes'),
+        headers: headers,
+      );
+
       if (response.statusCode == 200) {
-        List<dynamic> data = json.decode(response.body);
-        return data.map((json) => Country.fromJson(json)).toList();
+        final decodedData = json.decode(response.body);
+
+        // Pancerne wyciąganie listy (zabezpieczenie przed różnymi strukturami API)
+        List<dynamic> dataList = [];
+        if (decodedData is List) {
+          dataList = decodedData;
+        } else if (decodedData is Map) {
+          if (decodedData['data'] is List) {
+            dataList = decodedData['data'];
+          } else if (decodedData['data'] is Map && decodedData['data']['objects'] is List) {
+            dataList = decodedData['data']['objects'];
+          } else if (decodedData['objects'] is List) {
+            dataList = decodedData['objects'];
+          }
+        }
+
+        return dataList.map((json) => Country.fromJson(json as Map<String, dynamic>)).toList();
       } else {
-        throw Exception('Błąd: ${response.statusCode}');
+        throw Exception('Błąd HTTP: ${response.statusCode}');
       }
     } catch (e) {
-      throw Exception('Błąd połączenia z API.');
+      throw Exception('Błąd połączenia z nowym API.');
     }
   }
 
   Future<CountryDetails> fetchCountryDetails(String alpha3Code) async {
     try {
-      final response = await http.get(Uri.parse('$baseUrl/alpha/$alpha3Code'));
+      final response = await http.get(
+        Uri.parse('$baseUrl/codes.alpha_3/$alpha3Code'),
+        headers: headers,
+      );
+
       if (response.statusCode == 200) {
-        List<dynamic> data = json.decode(response.body);
-        return CountryDetails.fromJson(data.first);
+        final decodedData = json.decode(response.body);
+
+        List<dynamic> dataList = [];
+        if (decodedData is List) {
+          dataList = decodedData;
+        } else if (decodedData is Map) {
+          if (decodedData['data'] is List) {
+            dataList = decodedData['data'];
+          } else if (decodedData['data'] is Map && decodedData['data']['objects'] is List) {
+            dataList = decodedData['data']['objects'];
+          } else if (decodedData['objects'] is List) {
+            dataList = decodedData['objects'];
+          }
+        }
+
+        if (dataList.isEmpty) throw Exception('Brak kraju');
+        return CountryDetails.fromJson(dataList.first as Map<String, dynamic>);
       } else {
-        throw Exception('Błąd: ${response.statusCode}');
+        throw Exception('Błąd HTTP: ${response.statusCode}');
       }
     } catch (e) {
       throw Exception('Błąd pobierania szczegółów.');
